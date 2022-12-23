@@ -10,7 +10,13 @@ M.sandbox_helper_loaded = false
 	end
 end]]
 
-M.sandbox = function(code, permissions)
+M.sandbox = function(code, permissions, location)
+	local safeguard = 'assert('..consts.CODE_NAME..'.sandboxed and _G["'..consts.CODE_NAME..'"].sandboxed, "Not sandboxed properly, please report this issue immidiately");\t'
+	
+	if not permissions.escape_sandbox then
+		code = safeguard..code
+	end
+
 	--fixme: this can probably load bytecode
 	local fn,err = loadstring(code)
 	if not fn then return false,err end
@@ -26,7 +32,9 @@ M.sandbox = function(code, permissions)
 		for i,v in pairs(permissions) do
 			permissions_clone[i] = v
 		end
-		setmetatable(permissions_clone, { __newindex = function()end }) --this is not required
+		--this is not actually required
+		setmetatable(permissions_clone, { __newindex = function()end }) 
+	
 		local env = {
 			print = print,
 			type = type,
@@ -137,6 +145,12 @@ M.sandbox = function(code, permissions)
 			--jit = permissions.control_jit and jit or nil,
 
 			--powder toy functions
+			tpt = {
+				version = {
+					jacob1s_mod = jacob1s_mod
+				}
+				--todo legacy apis
+			}
 			fs = {
 				list = permissions.filesystem and fs.list or nil,
 				exists = permissions.filesystem and fs.exists or nil,
@@ -176,6 +190,12 @@ M.sandbox = function(code, permissions)
 				source = permissions.internet and socket.source or nil,
 				-- todo add dns table here
 			},
+
+			--used by sandboxed require
+			package = {
+				loaded = {},
+				preload = {},
+			}
 		}
 		--todo sandboxed events, sould stop after the script is disabled
 		--todo implement sandboxed require, loadstring etc
@@ -186,6 +206,51 @@ M.sandbox = function(code, permissions)
 			sandboxed = true,
 			permissions = permissions_clone,
 		}
+		--sandboxed require
+		env.require = function(path)
+			--todo make sure that this can't load files from outside!
+
+			assert(location, 'Sandboxed script tried to use `require` but has unknown location')
+
+			--normalize path
+			local normalized_req_path = path:gsub('%/','.'):gsub('%~', ''):gsub('%:','')
+			while normalized_req_path:sub(1,1) == '.' do
+				normalized_req_path = normalized_req_path:sub(2, #normalized_req_path)
+			end
+			while normalized_req_path:sub(-1) == '.' do
+				normalized_req_path = normalized_req_path:sub(1, #normalized_req_path - 1)
+			end
+			--check package.loaded
+			do
+				local loaded = env.package.loaded[normalized_req_path]
+				if loaded ~= nil then
+					return loaded
+				end
+			end
+			--check package.preload
+			do 
+				local preload = env.package.preload[normalized_req_path]
+				if type(preload) == 'function' then
+					return setfenv(preload, env)()
+				end
+			end
+			--load package from file
+			do
+				local req_lua_file_path = location..'/'..normalized_req_path:gsub('%.', '/')..'.lua'
+				print('require '..req_lua_file_path)
+				local file = assert(io.open(req_lua_file_path, 'rb'))
+				local ld_code = file:read('*a')
+				file:close()
+				ld_code = safeguard..ld_code
+				local fn = assert(loadstring(ld_code, path))
+				local sboxed_fn = setfenv(fn, env)
+				local result = sboxed_fn()
+				if result == nil then
+					result = false
+				end
+				env.package.loaded[normalized_req_path] = result
+			end
+		end
 
 		fn = setfenv(fn, env)
 	end

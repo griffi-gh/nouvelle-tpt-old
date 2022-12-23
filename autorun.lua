@@ -24,15 +24,15 @@ end
 function manager:compile_script_entrypoints()
 	for _,v in ipairs(self.scripts) do
 		if v.format == 'mod' then
-			local file = io.open(v.entrypoint_file_path, 'rb')
-			local code, file_err = file:read('*a')
-			file:close()
-			if file_err then
+			local file, file_err = io.open(v.entrypoint_file_path, 'rb')
+			if file_err and (not file) then
 				tpt.throw_error('Script load error: \n'..file_err)
 			else
-				local box, compile_err = sandbox.sandbox(code, v.permissions)
+				local code = file:read('*a')
+				file:close()
+				local box, compile_err = sandbox.sandbox(code, v.permissions, v.dir_path)
 				if compile_err then
-					tpt.throw_error('Script compile error: \n'..err)
+					tpt.throw_error('Script compile error: \n'..compile_err)
 				else 
 					v.sandbox = box
 				end
