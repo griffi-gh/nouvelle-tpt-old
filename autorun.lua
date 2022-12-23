@@ -25,13 +25,17 @@ function manager:compile_script_entrypoints()
 	for _,v in ipairs(self.scripts) do
 		if v.format == 'mod' then
 			local file = io.open(v.entrypoint_file_path, 'rb')
-			local code = file:read('*a')
+			local code, file_err = file:read('*a')
 			file:close()
-			local box, err = sandbox.sandbox(code, v.permissions)
-			if err then
-				tpt.throw_error('Script compile error: \n'..err)
-			else 
-				v.sandbox = box
+			if file_err then
+				tpt.throw_error('Script load error: \n'..file_err)
+			else
+				local box, compile_err = sandbox.sandbox(code, v.permissions)
+				if compile_err then
+					tpt.throw_error('Script compile error: \n'..err)
+				else 
+					v.sandbox = box
+				end
 			end
 		else
 			print('Mod format "'..v.format..'" is not executable')
