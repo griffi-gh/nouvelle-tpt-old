@@ -29,7 +29,7 @@ function manager:compile_script_entrypoints()
 			file:close()
 			local box, err = sandbox.sandbox(code, v.permissions)
 			if err then
-				print('Script compile error: '..err)
+				(tpt.error or print)('Script compile error: '..err)
 			else 
 				v.sandbox = box
 			end
