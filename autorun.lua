@@ -56,6 +56,8 @@ end
 --Global
 _G[consts.CODE_NAME] = {
 	sandboxed = false,
+	shared = sandbox.shared_table,
+	permissions = { escape_sandbox = true }
 }
 
 --Initialize

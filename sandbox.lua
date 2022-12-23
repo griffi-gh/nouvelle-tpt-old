@@ -206,6 +206,7 @@ M.sandbox = function(code, permissions, location, chunk_name)
 		env[consts.CODE_NAME] = {
 			sandboxed = true,
 			permissions = permissions_clone,
+			shared = permissions.shared and M.shared_table or nil
 		}
 		if permissions.shared then
 			env.shared = M.shared_table
