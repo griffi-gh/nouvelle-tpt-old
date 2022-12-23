@@ -10,6 +10,7 @@
 -- also:
 -- should string.dump be allowed?
 -- maybe proxy/wrap all external functions in the sandbox?
+-- cancel http requests on unload
 
 local Consts = require'manager.consts'
 
@@ -86,6 +87,7 @@ Sandbox.sandbox = function(code, permissions, location, chunk_name, script_id)
 			tonumber = tonumber,
 			tostring = tostring,			
 			xpcall = xpcall,
+			pcall = pcall,
 			unpack = unpack or table.unpack,
 			setmetatable = permissions.compat_metatable and setmetatable or nil,
 			getmetatable = permissions.compat_metatable and getmetatable or nil,
@@ -103,7 +105,7 @@ Sandbox.sandbox = function(code, permissions, location, chunk_name, script_id)
 				'upper',
 			}),
 			table = whitelist(table, {
-				'insert', 'maxn', 'remove', 'sort', 
+				'insert', 'maxn', 'remove', 'sort', 'concat',
 				{'unpack', unpack or table.unpack},
 			}),
 			math = whitelist(math, {
@@ -186,6 +188,9 @@ Sandbox.sandbox = function(code, permissions, location, chunk_name, script_id)
 				'tobit', 'tohex', 'bnot', 'band',
 				'bor', 'bxor', 'lshift', 'rshift',
 				'arshift', 'rol', 'ror', 'bswap',
+			}),
+			http = whitelist(http, {
+				'get', 'post'
 			}),
 		}
 
@@ -292,6 +297,9 @@ Sandbox.load_helper = function()
 		if socket.udp then protect_helper(socket.udp()) end
 		if socket.sink then protect_helper(socket.sink("close-when-done", socket.tcp())) end
 		if socket.source then protect_helper(socket.source("until-closed", socket.tcp())) end
+	end
+	if http then
+		protect_helper(http.get(''))
 	end
 	--getmetatable(coroutine.create(function()end)).__metatable = ""
 end
