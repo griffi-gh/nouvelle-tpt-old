@@ -30,7 +30,7 @@ function manager:compile_script_entrypoints()
 			else
 				local code = file:read('*a')
 				file:close()
-				local box, compile_err = sandbox.sandbox(code, v.permissions, v.dir_path)
+				local box, compile_err = sandbox.sandbox(code, v.permissions, v.dir_path, v.id)
 				if compile_err then
 					tpt.throw_error('Script compile error: \n'..compile_err)
 				else 

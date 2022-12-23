@@ -6,7 +6,9 @@ M.sandbox_helper_loaded = false
 
 --local function proxy(fn) return function(...) return fn(...) end
 
-M.sandbox = function(code, permissions, location)
+M.sandbox = function(code, permissions, location, chunk_name)
+    chunk_name = chunk_name or 'sandboxed'
+
 	local safeguard = 'assert('..consts.CODE_NAME..'.sandboxed and _G["'..consts.CODE_NAME..'"].sandboxed, "Not sandboxed properly, please report this issue immidiately");\t'
 	
 	if not permissions.escape_sandbox then
@@ -16,7 +18,7 @@ M.sandbox = function(code, permissions, location)
 		code = safeguard..code
 	end
 
-	local fn,err = loadstring(code)
+	local fn,err = loadstring(code, chunk_name)
 	if not fn then return false,err end
 	
 	if not permissions.escape_sandbox then
@@ -247,7 +249,7 @@ M.sandbox = function(code, permissions, location)
 					return error("binary bytecode prohibited")
 				end
 				ld_code = safeguard..ld_code
-				local fn = assert(loadstring(ld_code, path))
+				local fn = assert(loadstring(ld_code, chunk_name..':'..path))
 				local sboxed_fn = setfenv(fn, env)
 				local raw_result = {sboxed_fn()}
 				local result = raw_result[1]
