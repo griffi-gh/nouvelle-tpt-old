@@ -94,17 +94,17 @@ Sandbox.sandbox = function(code, permissions, location, chunk_name, script_id)
 			rawequal = permissions.compat_metatable_raw and rawequal or nil,
 			coroutine = whitelist(coroutine, {
 				'create', 'resume', 'running', 'status', 
-				'wrap', 'yield'
+				'wrap', 'yield',
 			}),
 			string = whitelist(string, {
 				'byte', 'char', 'find', 'format',
 				'gmatch', 'gsub', 'len', 'lower', 
 				'match', 'rep', 'reverse', 'sub',
-				'upper'
+				'upper',
 			}),
 			table = whitelist(table, {
 				'insert', 'maxn', 'remove', 'sort', 
-				{'unpack', unpack or table.unpack}
+				{'unpack', unpack or table.unpack},
 			}),
 			math = whitelist(math, {
 				w_cond(math, 'randomseed', permissions.compat_randomseed),
@@ -113,11 +113,11 @@ Sandbox.sandbox = function(code, permissions, location, chunk_name, script_id)
 				'floor', 'fmod', 'frexp', 'huge', 'ldexp', 
 				'log', 'log10', 'max', 'min', 'modf',
 				'pi', 'pow', 'rad', 'random', 'sin', 
-				'sinh', 'sqrt', 'tan', 'tanh'
+				'sinh', 'sqrt', 'tan', 'tanh',
 			}),
 			io = whitelist(io, {
 				w_cond(io, 'open', permissions.filesystem),
-				'read', 'write', 'flush', 'type'
+				'read', 'write', 'flush', 'type',
 			}),
 			os = whitelist(os, {
 				w_cond(os, 'exit', permissions.exit),
@@ -125,7 +125,7 @@ Sandbox.sandbox = function(code, permissions, location, chunk_name, script_id)
 				w_cond(os, 'remove', permissions.filesystem),
 				w_cond(os, 'rename', permissions.filesystem),
 				w_cond(os, 'tmpname', permissions.filesystem),
-				'clock', 'date', 'difftime', 'time'
+				'clock', 'date', 'difftime', 'time',
 			}),
 			
 			--used by sandboxed require, does not behave exactly like real _G.package
@@ -139,8 +139,8 @@ Sandbox.sandbox = function(code, permissions, location, chunk_name, script_id)
 			--powder toy functions
 			tpt = whitelist(tpt, {
 				{'version', whitelist(tpt.version, {
-					'jacob1s_mod', 'major', 'minor'
-				})}
+					'jacob1s_mod', 'major', 'minor',
+				})},
 				--todo legacy apis
 			}),
 			fs = whitelist(fs, {
@@ -180,8 +180,13 @@ Sandbox.sandbox = function(code, permissions, location, chunk_name, script_id)
 				'FIELD_TMP2', 'FIELD_TMP', 'FIELD_FLAGS', 'FIELD_VX', 'FIELD_CTYPE', 
 				'FIELD_LIFE', 'MAX_TEMP', 'MIN_TEMP', 'NUM_PARTS', 'PT_NUM', 
 				'R_TEMP', 'TOOL_VAC', 'TOOL_AIR', 'TOOL_NGRV', 'TOOL_PGRV', 
-				'TOOL_HEAT', 'TOOL_WIND', 'TOOL_COOL', 'YRES', 'XRES'
-			})
+				'TOOL_HEAT', 'TOOL_WIND', 'TOOL_COOL', 'YRES', 'XRES',
+			}),
+			bit = whitelist(bit, {
+				'tobit', 'tohex', 'bnot', 'band',
+				'bor', 'bxor', 'lshift', 'rshift',
+				'arshift', 'rol', 'ror', 'bswap',
+			}),
 		}
 
 		--globals
