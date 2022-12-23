@@ -70,6 +70,7 @@ M.enumerate_scripts_in_path = function(path, is_not_root)
 				end
 			end
 		end
+		local entrypoint_path = path..'/'..configuration.mod.entrypoint:gsub('%.','/')..'.lua'
 		scripts[#scripts+1] = {
 			format = 'mod',
 			dir_path = path,
@@ -78,6 +79,7 @@ M.enumerate_scripts_in_path = function(path, is_not_root)
 			author = configuration.mod.author,
 			description = configuration.mod.description,		
 			entrypoint = configuration.mod.entrypoint,
+			entrypoint_file_path = entrypoint_path,
 			permissions = permissions,
 		}
 	elseif format == 'legacy' then

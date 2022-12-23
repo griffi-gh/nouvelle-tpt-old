@@ -1,3 +1,5 @@
+local consts = require'manager.consts'
+
 local M = {}
 
 M.sandbox_helper_loaded = false
