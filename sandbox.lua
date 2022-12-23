@@ -2,7 +2,7 @@ local M = {}
 
 M.sandbox_helper_loaded = false
 
-M.sandbox = function(code, is_compat_mode, permissions)
+M.sandbox = function(code, permissions)
 	local fn,err = loadstring(code)
 	if not fn then return false,err end
 
