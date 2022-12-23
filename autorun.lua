@@ -29,7 +29,7 @@ function manager:compile_script_entrypoints()
 			file:close()
 			local box, err = sandbox.sandbox(code, v.permissions)
 			if err then
-				(tpt.error or print)('Script compile error: '..err)
+				tpt.throw_error('Script compile error: \n'..err)
 			else 
 				v.sandbox = box
 			end
@@ -43,7 +43,7 @@ function manager:run_compiled_scripts()
 		if v.sandbox then
 			local result, err = v.sandbox()
 			if (not result) and err then
-				print('Script runtime error: '..err)
+				tpt.throw_error('Script runtime error: \n'..err)
 			end
 		end
 	end
