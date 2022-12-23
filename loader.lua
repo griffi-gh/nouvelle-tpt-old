@@ -1,5 +1,5 @@
-local consts = require'manager.consts'
-local toml = require'manager.lib.toml'
+local Consts = require'manager.consts'
+local Toml = require'manager.lib.toml'
 
 local M = {}
 
@@ -13,10 +13,10 @@ M.enumerate_scripts_in_path = function(path, is_not_root)
 	local format = 'normal'
 	for i,file in ipairs(file_list) do 
 		--check if mod metadata file exists
-		if is_not_root and (file == consts.MOD_CONF_FILE) then
+		if is_not_root and (file == Consts.MOD_CONF_FILE) then
 			format = 'mod'
 			break
-		elseif (not is_not_root) and (file == consts.LEGACY_AUTORUN_FILE) then
+		elseif (not is_not_root) and (file == Consts.LEGACY_AUTORUN_FILE) then
 			format = 'legacy'
 			break
 		end
@@ -46,14 +46,14 @@ M.enumerate_scripts_in_path = function(path, is_not_root)
 		end
 	elseif format == 'mod' then
 		--todo handle errors!
-		local conf_file_path = path..'/'..consts.MOD_CONF_FILE
+		local conf_file_path = path..'/'..Consts.MOD_CONF_FILE
 		local file = io.open(conf_file_path, 'rb')
 		local conf_file_data = file:read('*a')
 		file:close()
-		local configuration = toml.parse(conf_file_data)
+		local configuration = Toml.parse(conf_file_data)
 		local permissions = {}
 		if configuration.no_sandbox then
-			permissions.escape_sandbox = true
+			permissions.no_sandbox = true
 		else
 			for i,v in pairs(configuration.permissions) do
 				if type(i) == 'number' then
@@ -74,7 +74,7 @@ M.enumerate_scripts_in_path = function(path, is_not_root)
 		scripts[#scripts+1] = {
 			format = 'mod',
 			dir_path = path,
-			id = configuration.mod.id,			
+			id = configuration.mod.id,	
 			name = configuration.mod.name,
 			author = configuration.mod.author,
 			description = configuration.mod.description,		

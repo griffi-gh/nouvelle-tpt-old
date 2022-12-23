@@ -1,19 +1,50 @@
---todo sandboxed events, sould stop after the script is disabled
---todo scoped filesystem and safe scoped requires!
+--todos:
+-- sandboxed/hooked events, sould stop after the script is disabled
+-- 		- (should i hook all events or just unregiter them agter unload?)
+-- auto-unregister elements
+-- scoped filesystem
+-- sandboxed loadstring
+-- load /init.lua in require
+-- write path sznitize function/properly sanitize paths in require
+--
+-- also:
+-- should string.dump be allowed?
+-- maybe proxy/wrap all external functions in the sandbox?
 
-local consts = require'manager.consts'
+local Consts = require'manager.consts'
 
-local M = {}
+local Sandbox = {
+	helper_loaded = false,
+	shared_table = {}
+}
 
-M.sandbox_helper_loaded = false
-M.shared_table = {}
+local function whitelist(of, keys)
+	assert(of and keys)
+	local cloned = {}
+	for _,key in ipairs(keys) do
+		if key then
+			if (type(key) == 'table') and (type(key[1]) == 'string') and (key[2] ~= nil) then
+				cloned[key[1]] = key[2]
+			else
+				cloned[key] = of[key]
+			end
+		end
+	end
+	return cloned
+end
 
-M.sandbox = function(code, permissions, location, chunk_name, script_id)
-    chunk_name = chunk_name or 'sandboxed'
+local function w_cond(of, key, cond)
+	return { key, cond and of[key] or nil }
+end
 
-	local safeguard = 'assert('..consts.CODE_NAME..'.sandboxed and _G["'..consts.CODE_NAME..'"].sandboxed, "Not sandboxed properly, please report this issue immidiately");\t'
+Sandbox.sandbox = function(code, permissions, location, chunk_name, script_id)
+	assert(code and permissions and script_id)
+
+    chunk_name = chunk_name or script_id or 'sandboxed'
+
+	local safeguard = 'assert('..Consts.CODE_NAME..'.sandboxed and _G["'..Consts.CODE_NAME..'"].sandboxed, "Not sandboxed properly, please report this issue immidiately");\t'
 	
-	if not permissions.escape_sandbox then
+	if not permissions.no_sandbox then
 		if code:byte(1) == 27 then
 			return nil, "binary bytecode prohibited"
 		end
@@ -23,17 +54,17 @@ M.sandbox = function(code, permissions, location, chunk_name, script_id)
 	local fn,err = loadstring(code, chunk_name)
 	if not fn then return false,err end
 	
-	if not permissions.escape_sandbox then
-		if not M.sandbox_helper_loaded then
+	if not permissions.no_sandbox then
+		if not Sandbox.helper_loaded then
 			print('Sandbox helper is not loaded, metatable permissions are unsafe witout it and therefore will be disabled!')
 			permissions.compat_metatable = false
 			permissions.compat_metatable_raw = false
 		end
 
-		if M.shared_table[script_id] then
+		if Sandbox.shared_table[script_id] then
 			return false, "already running in sandbox"
 		end
-		M.shared_table[script_id] = {}
+		Sandbox.shared_table[script_id] = {}
 
 		local permissions_clone = {}
 		for i,v in pairs(permissions) do
@@ -43,6 +74,7 @@ M.sandbox = function(code, permissions, location, chunk_name, script_id)
 		setmetatable(permissions_clone, { __newindex = function()end }) 
 	
 		local env = {
+			_VERSION = _VERSION,
 			print = print,
 			type = type,
 			error = error,
@@ -52,180 +84,127 @@ M.sandbox = function(code, permissions, location, chunk_name, script_id)
 			next = next,
 			select = select,
 			tonumber = tonumber,
-			tostring = tostring,
-			unpack = unpack or table.unpack,
-			_VERSION = _VERSION,
+			tostring = tostring,			
 			xpcall = xpcall,
-			coroutine = {
-				create = coroutine.create, --todo point to our metatable
-				resume = coroutine.resume,
-				running = coroutine.running,
-				status = coroutine.status,
-				wrap = coroutine.wrap,
-				yield = coroutine.yield,
-			},
-			string = {
-				--todo somehow point all strings here???
-				byte = string.byte,
-				char = string.char,
-				find = string.find,
-				format = string.format,
-				gmatch = string.gmatch,
-				gsub = string.gsub,
-				len = string.len,
-				lower = string.lower,
-				match = string.match,
-				rep = string.rep,
-				reverse = string.reverse,
-				sub = string.sub,
-				upper = string.upper,
-				--todo: should string.dump be allowed ny default?
-				dump = permissions.compat_string_dump and string.dump or nil
-			},
-			table = {
-				insert = table.insert,
-				maxn = table.maxn,
-				remove = table.remove,
-				sort = table.sort,
-				unpack = unpack or table.unpack,
-			},
-			math = {
-				abs = math.abs,
-				acos = math.acos,
-				asin = math.asin,
-				atan = math.atan,
-				atan2 = math.atan2,
-				ceil = math.ceil,
-				cos = math.cos,
-				cosh = math.cosh,
-				deg = math.deg,
-				exp = math.exp,
-				floor = math.floor,
-				fmod = math.fmod,
-				frexp = math.frexp,
-				huge = math.huge,
-				ldexp = math.ldexp,
-				log = math.log,
-				log10 = math.log10,
-				max = math.max,
-				min = math.min,
-				modf = math.modf,
-				pi = math.pi,
-				pow = math.pow,
-				rad = math.rad,
-				--todo implement our own little pseudo-rng
-				--use it to whitelist randomseed without the compat flag!
-				random = math.random,
-				randomseed = permissions.compat_randomseed and math.randomseed or nil,
-				sin = math.sin,
-				sinh = math.sinh,
-				sqrt = math.sqrt,
-				tan = math.tan,
-				tanh = math.tanh,
-			},
-			io = {
-				open = permissions.filesystem and io.open or nil,
-				read = io.read,
-				write = io.write,
-				flush = io.flush,
-				type = io.type,
-			},
-			os = {
-				clock = os.clock,
-				date = os.date, --this can crash on some systems
-				exit = permissions.exit and os.exit or nil,
-				getenv = permissions.env and os.getenv or nil,
-				difftime = os.difftime,
-				--execute = permissions.execute and os.execute or nil,
-				remove = permissions.filesystem and os.remove or nil,
-				rename = permissions.filesystem and os.rename or nil,
-				time = os.time,
-				tmpname = permissions.filesystem and os.tmpname or nil,
-			},
+			unpack = unpack or table.unpack,
 			setmetatable = permissions.compat_metatable and setmetatable or nil,
 			getmetatable = permissions.compat_metatable and getmetatable or nil,
 			rawget = permissions.compat_metatable_raw and rawget or nil,
 			rawset = permissions.compat_metatable_raw and rawset or nil,
 			rawequal = permissions.compat_metatable_raw and rawequal or nil,
+			coroutine = whitelist(coroutine, {
+				'create', 'resume', 'running', 'status', 
+				'wrap', 'yield'
+			}),
+			string = whitelist(string, {
+				'byte', 'char', 'find', 'format',
+				'gmatch', 'gsub', 'len', 'lower', 
+				'match', 'rep', 'reverse', 'sub',
+				'upper'
+			}),
+			table = whitelist(table, {
+				'insert', 'maxn', 'remove', 'sort', 
+				{'unpack', unpack or table.unpack}
+			}),
+			math = whitelist(math, {
+				w_cond(math, 'randomseed', permissions.compat_randomseed),
+				'abs', 'acos', 'asin', 'atan', 'atan2', 
+				'ceil', 'cos', 'cosh', 'deg', 'exp', 
+				'floor', 'fmod', 'frexp', 'huge', 'ldexp', 
+				'log', 'log10', 'max', 'min', 'modf',
+				'pi', 'pow', 'rad', 'random', 'sin', 
+				'sinh', 'sqrt', 'tan', 'tanh'
+			}),
+			io = whitelist(io, {
+				w_cond(io, 'open', permissions.filesystem),
+				'read', 'write', 'flush', 'type'
+			}),
+			os = whitelist(os, {
+				w_cond(os, 'exit', permissions.exit),
+				w_cond(os, 'getenv', permissions.env),
+				w_cond(os, 'remove', permissions.filesystem),
+				w_cond(os, 'rename', permissions.filesystem),
+				w_cond(os, 'tmpname', permissions.filesystem),
+				'clock', 'date', 'difftime', 'time'
+			}),
 			
-			--luajit specific
-			--ffi = permissions.execute and ffi or nil,
-			--jit = permissions.control_jit and jit or nil,
-
-			--powder toy functions
-			tpt = {
-				version = {
-					jacob1s_mod = jacob1s_mod,
-					
-				}
-				--todo legacy apis
-			},
-			fs = {
-				list = permissions.filesystem and fs.list or nil,
-				exists = permissions.filesystem and fs.exists or nil,
-				isFile = permissions.filesystem and fs.isFile or nil,
-				isDirectory = permissions.filesystem and fs.isDirectory or nil,
-				makeDirectory = permissions.filesystem and fs.makeDirectory or nil,
-				removeFile = permissions.filesystem and fs.removeFile or nil,
-				removeDirectory = permissions.filesystem and fs.removeDirectory or nil,
-				removeFile = permissions.filesystem and fs.removeFile or nil,
-				move = permissions.filesystem and fs.move or nil,
-				copy = permissions.filesystem and fs.copy or nil,
-			},
-			graphics = {
-				textSize = graphics.textSize,
-				drawText = permissions.graphics and graphics.drawText or nil,
-				drawLine = permissions.graphics and graphics.drawLine or nil,
-				drawRect = permissions.graphics and graphics.drawRect or nil,
-				fillRect = permissions.graphics and graphics.fillRect or nil,
-				drawCircle = permissions.graphics and graphics.drawCircle or nil,
-				fillCircle = permissions.graphics and graphics.fillCircle or nil,
-				getColors = graphics.getColors,
-				getHexColor = graphics.getHexColor,
-			},
-			socket = {
-				_VERSION = socket._VERSION,
-				_DEBUG = socket._DEBUG,
-				gettime = socket.gettime,
-				sleep = socket.sleep,
-				try = socket.try,
-				protect = socket.protect,
-				newtry = socket.newtry,
-				skip = socket.skip,
-				tcp = permissions.internet and socket.tcp or nil,
-				udp = permissions.internet and socket.udp or nil,
-				sink = permissions.internet and socket.sink or nil,
-				select = permissions.internet and socket.select or nil,
-				source = permissions.internet and socket.source or nil,
-				-- todo add dns table here
-			},
-
-			--used by sandboxed require
+			--used by sandboxed require, does not behave exactly like real _G.package
 			package = {
 				loaded = {},
 				preload = {},
-			}
+			},
+
+			--luajit specific
+
+			--powder toy functions
+			tpt = whitelist(tpt, {
+				{'version', whitelist(tpt.version, {
+					'jacob1s_mod', 'major', 'minor'
+				})}
+				--todo legacy apis
+			}),
+			fs = whitelist(fs, {
+				w_cond(fs, 'list', permissions.filesystem),
+				w_cond(fs, 'exists', permissions.filesystem),
+				w_cond(fs, 'isFile', permissions.filesystem),
+				w_cond(fs, 'isDirectory', permissions.filesystem),
+				w_cond(fs, 'makeDirectory', permissions.filesystem),
+				w_cond(fs, 'removeFile', permissions.filesystem),
+				w_cond(fs, 'removeDirectory', permissions.filesystem),
+				w_cond(fs, 'move', permissions.filesystem),
+				w_cond(fs, 'copy', permissions.filesystem),
+			}),
+			graphics = whitelist(graphics, {
+				'textSize', 'getColors', 'getHexColor', 
+				w_cond(fs, 'drawText', permissions.graphics),
+				w_cond(fs, 'drawLine', permissions.graphics),
+				w_cond(fs, 'drawRect', permissions.graphics),
+				w_cond(fs, 'fillRect', permissions.graphics),
+				w_cond(fs, 'drawCircle', permissions.graphics),
+				w_cond(fs, 'fillCircle', permissions.graphics),
+			}),
+			socket = whitelist(socket, {
+				'_VERSION', '_DEBUG', 'gettime', 'sleep',
+				'try', 'protect', 'newtry', 'skip',
+				w_cond(fs, 'tcp', permissions.internet),
+				w_cond(fs, 'udp', permissions.internet),
+				w_cond(fs, 'sink', permissions.internet),
+				w_cond(fs, 'select', permissions.internet),
+				w_cond(fs, 'source', permissions.internet),
+				--dns is missing!
+			}),
+			simulation = whitelist(sim, {
+				'DECO_DIVIDE', 'DECO_SMUDGE', 'DECO_ADD', 'DECO_SUBTRACT', 
+				'DECO_CLEAR', 'DECO_DRAW', 'DECO_MULTIPLY', 'FIELD_DCOLOUR', 
+				'FIELD_Y', 'FIELD_TEMP', 'FIELD_TYPE', 'FIELD_VY', 'FIELD_X', 
+				'FIELD_TMP2', 'FIELD_TMP', 'FIELD_FLAGS', 'FIELD_VX', 'FIELD_CTYPE', 
+				'FIELD_LIFE', 'MAX_TEMP', 'MIN_TEMP', 'NUM_PARTS', 'PT_NUM', 
+				'R_TEMP', 'TOOL_VAC', 'TOOL_AIR', 'TOOL_NGRV', 'TOOL_PGRV', 
+				'TOOL_HEAT', 'TOOL_WIND', 'TOOL_COOL', 'YRES', 'XRES'
+			})
 		}
+
+		--globals
 		env._G = env
 		env._ENV = env
-		env[consts.CODE_NAME] = {
+
+		--aliases
+		env.sim = simulation
+
+		--information
+		env[Consts.CODE_NAME] = {
 			sandboxed = true,
 			permissions = permissions_clone,
+			shared = Sandbox.shared_table[script_id],
+			shared_of = function(mod_id)
+				return Sandbox.shared_table[tostring(mod_id)] or nil
+			end
 		}
-		
-		--shared table functions
-		
-		env.shared = M.shared_table[script_id]
-		env.shared_of = function(mod_id)
-			return M.shared_table[tostring(mod_id)] or nil
-		end
 
 		--sandboxed require
-		--todo load /init.lua
-		--todo make sure that this can't load files from outside!
-		--todo sandboxed loadstring
 		env.require = function(path)
 			assert(location, 'Sandboxed script tried to use `require` but has unknown location')
+			print('require '..path)
 			
 			--normalize path
 			local normalized_req_path = path:gsub('%/','.'):gsub('%~', ''):gsub('%:','')
@@ -255,7 +234,6 @@ M.sandbox = function(code, permissions, location, chunk_name, script_id)
 			--load package from file
 			do
 				local req_lua_file_path = location..'/'..normalized_req_path:gsub('%.', '/')..'.lua'
-				print('require '..req_lua_file_path)
 				local file = assert(io.open(req_lua_file_path, 'rb'))
 				local ld_code = file:read('*a')
 				file:close()
@@ -282,21 +260,27 @@ M.sandbox = function(code, permissions, location, chunk_name, script_id)
 		fn = fn,
 		env = env,
 		__call = function(self) return pcall(self.fn) end,
-		unload = function(self) 
-			M.shared_table[script_id] = nil
+		unload = function(self)
+			if type(self.env.on_before_unload) == 'function' then
+				print('WARNING: on_before_unload api will be deprecated soon!')
+				--before unload fn must be called inside the sandbox
+				setfenv(self.env.on_before_unload, self.env)()
+			end
+			Sandbox.shared_table[script_id] = nil
 		end
 	}
 	return setmetatable(obj, obj)
 end
 
 local function protect_helper(of)	
-	local shared_lock = 0
-	getmetatable(of).__metatable = shared_lock
 	if type(of) == 'table' then of.__metatable = shared_lock end
+	getmetatable(of).__newindex = function() error('Protected') end
+	getmetatable(of).__metatable = 0
 end
 
-M.load_sandbox_helper = function()
-	M.sandbox_helper_loaded = assert(not M.sandbox_helper_loaded, 'sandbox helper already loaded')
+Sandbox.load_helper = function()
+	assert(not Sandbox.helper_loaded, 'sandbox helper already loaded')
+	Sandbox.helper_loaded = true
 	protect_helper("")
 	if socket then
 		if socket.tcp then protect_helper(socket.tcp()) end
@@ -307,4 +291,4 @@ M.load_sandbox_helper = function()
 	--getmetatable(coroutine.create(function()end)).__metatable = ""
 end
 
-return M
+return Sandbox
