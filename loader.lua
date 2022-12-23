@@ -48,9 +48,9 @@ M.enumerate_scripts_in_path = function(path, is_not_root)
 		--todo handle errors!
 		local conf_file_path = path..'/'..consts.MOD_CONF_FILE
 		local file = io.open(conf_file_path, 'rb')
-		local conf_file_data = f:read('*a')
+		local conf_file_data = file:read('*a')
 		file:close()
-		local configuration = TOML.parse(conf_file_data)
+		local configuration = toml.parse(conf_file_data)
 		local permissions = {}
 		if configuration.no_sandbox then
 			permissions.escape_sandbox = true

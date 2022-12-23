@@ -98,7 +98,7 @@ M.sandbox = function(code, permissions)
 				--todo implement our own little pseudo-rng
 				--use it to whitelist randomseed without the compat flag!
 				random = math.random,
-				randomseed = permissions.compat_randomseed and math.randomseed or nil
+				randomseed = permissions.compat_randomseed and math.randomseed or nil,
 				sin = math.sin,
 				sinh = math.sinh,
 				sqrt = math.sqrt,
