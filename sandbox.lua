@@ -9,7 +9,8 @@ M.sandbox = function(code, is_compat_mode, permissions)
 	if not permissions.escape_sandbox then
 		if not M.sandbox_helper_loaded then
 			print('Sandbox helper is not loaded, metatable permissions are unsafe witout it and therefore will be disabled!')
-			permissions.metatable = false
+			permissions.compat_metatable = false
+			permissions.compat_metatable_raw = false
 		end
 
 		local permissions_clone = {}
@@ -116,9 +117,11 @@ M.sandbox = function(code, is_compat_mode, permissions)
 				time = os.time,
 				tmpname = permissions.filesystem and os.tmpname or nil,
 			},
-			setmetatable = permissions.metatable and setmetatable,
-			getmetatable = permissions.metatable and getmetatable,
-			
+			setmetatable = permissions.compat_metatable and setmetatable or nil,
+			getmetatable = permissions.compat_metatable and getmetatable or nil,
+			rawget = permissions.compat_metatable_raw and rawget or nil,
+			rawset = permissions.compat_metatable_raw and rawset or nil,
+			rawequal = permissions.compat_metatable_raw and rawequal or nil,
 			
 			--luajit specific
 			--ffi = permissions.execute and ffi or nil,
@@ -148,7 +151,22 @@ M.sandbox = function(code, is_compat_mode, permissions)
 				getColors = graphics.getColors,
 				getHexColor = graphics.getHexColor,
 			},
-	
+			socket = {
+				_VERSION = socket._VERSION,
+				_DEBUG = socket._DEBUG,
+				gettime = socket.gettime,
+				sleep = socket.sleep,
+				try = socket.try,
+				protect = socket.protect,
+				newtry = socket.newtry,
+				skip = socket.skip,
+				tcp = permissions.internet and socket.tcp or nil,
+				udp = permissions.internet and socket.udp or nil,
+				sink = permissions.internet and socket.sink or nil,
+				select = permissions.internet and socket.select or nil,
+				source = permissions.internet and socket.source or nil,
+				-- todo add dns table here
+			},
 		}
 		--todo sandboxed events, sould stop after the script is disabled
 		--todo implement sandboxed require, loadstring etc
@@ -170,10 +188,21 @@ M.sandbox = function(code, is_compat_mode, permissions)
 	return setmetatable(obj, obj)
 end
 
+local function protect_helper(of)	
+	local shared_lock = 0
+	getmetatable(of).__metatable = shared_lock
+	if type(of) == 'table' then of.__metatable = shared_lock end
+end
+
 M.load_sandbox_helper = function()
 	M.sandbox_helper_loaded = assert(not M.sandbox_helper_loaded, 'sandbox helper already loaded')
-	local shared_lock = ""
-	getmetatable("").__metatable = ""
+	protect_helper("")
+	if socket then
+		if socket.tcp then protect_helper(socket.tcp()) end
+		if socket.udp then protect_helper(socket.udp()) end
+		if socket.sink then protect_helper(socket.sink("close-when-done", socket.tcp())) end
+		if socket.source then protect_helper(socket.source("until-closed", socket.tcp())) end
+	end
 	--getmetatable(coroutine.create(function()end)).__metatable = ""
 end
 

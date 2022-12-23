@@ -26,7 +26,7 @@ M.enumerate_scripts_in_path = function(path, is_not_root)
 		for _,file in ipairs(file_list) do 
 			local file_path = path..'/'..file
 			if fs.isDirectory(file_path) then
-				local subdir_scripts = enumerate_scripts_in_path(file_path, true)
+				local subdir_scripts = M.enumerate_scripts_in_path(file_path, true)
 				for _,script in ipairs(subdir_scripts) do
 					scripts[#scripts+1] = script
 				end
