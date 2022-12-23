@@ -4,20 +4,18 @@ local M = {}
 
 M.sandbox_helper_loaded = false
 
---[[local function proxy(fn)
-	return function(...)
-		return fn(...)
-	end
-end]]
+--local function proxy(fn) return function(...) return fn(...) end
 
 M.sandbox = function(code, permissions, location)
 	local safeguard = 'assert('..consts.CODE_NAME..'.sandboxed and _G["'..consts.CODE_NAME..'"].sandboxed, "Not sandboxed properly, please report this issue immidiately");\t'
 	
 	if not permissions.escape_sandbox then
+		if code:byte(1) == 27 then
+			return nil, "binary bytecode prohibited"
+		end
 		code = safeguard..code
 	end
 
-	--fixme: this can probably load bytecode
 	local fn,err = loadstring(code)
 	if not fn then return false,err end
 	
@@ -46,7 +44,7 @@ M.sandbox = function(code, permissions, location)
 			select = select,
 			tonumber = tonumber,
 			tostring = tostring,
-			unpack = unpack,
+			unpack = unpack or table.unpack,
 			_VERSION = _VERSION,
 			xpcall = xpcall,
 			coroutine = {
@@ -80,6 +78,7 @@ M.sandbox = function(code, permissions, location)
 				maxn = table.maxn,
 				remove = table.remove,
 				sort = table.sort,
+				unpack = unpack or table.unpack,
 			},
 			math = {
 				abs = math.abs,
@@ -116,7 +115,7 @@ M.sandbox = function(code, permissions, location)
 				tanh = math.tanh,
 			},
 			io = {
-				open = permissions.filesystem and os.open or nil,
+				open = permissions.filesystem and io.open or nil,
 				read = io.read,
 				write = io.write,
 				flush = io.flush,
@@ -126,7 +125,7 @@ M.sandbox = function(code, permissions, location)
 				clock = os.clock,
 				date = os.date, --this can crash on some systems
 				exit = permissions.exit and os.exit or nil,
-				getenv = permissions.env and os.env or nil,
+				getenv = permissions.env and os.getenv or nil,
 				difftime = os.difftime,
 				--execute = permissions.execute and os.execute or nil,
 				remove = permissions.filesystem and os.remove or nil,
@@ -147,10 +146,11 @@ M.sandbox = function(code, permissions, location)
 			--powder toy functions
 			tpt = {
 				version = {
-					jacob1s_mod = jacob1s_mod
+					jacob1s_mod = jacob1s_mod,
+					
 				}
 				--todo legacy apis
-			}
+			},
 			fs = {
 				list = permissions.filesystem and fs.list or nil,
 				exists = permissions.filesystem and fs.exists or nil,
@@ -197,8 +197,8 @@ M.sandbox = function(code, permissions, location)
 				preload = {},
 			}
 		}
+
 		--todo sandboxed events, sould stop after the script is disabled
-		--todo implement sandboxed require, loadstring etc
 		--todo scoped filesystem and safe scoped requires!
 		env._G = env
 		env._ENV = env
@@ -206,10 +206,12 @@ M.sandbox = function(code, permissions, location)
 			sandboxed = true,
 			permissions = permissions_clone,
 		}
-		--sandboxed require
-		env.require = function(path)
-			--todo make sure that this can't load files from outside!
 
+		--sandboxed require
+		--todo load /init.lua
+		--todo make sure that this can't load files from outside!
+		--todo sandboxed loadstring
+		env.require = function(path)
 			assert(location, 'Sandboxed script tried to use `require` but has unknown location')
 
 			--normalize path
@@ -241,14 +243,19 @@ M.sandbox = function(code, permissions, location)
 				local file = assert(io.open(req_lua_file_path, 'rb'))
 				local ld_code = file:read('*a')
 				file:close()
+				if ld_code:byte(1) == 27 then
+					return error("binary bytecode prohibited")
+				end
 				ld_code = safeguard..ld_code
 				local fn = assert(loadstring(ld_code, path))
 				local sboxed_fn = setfenv(fn, env)
-				local result = sboxed_fn()
+				local raw_result = {sboxed_fn()}
+				local result = raw_result[1]
 				if result == nil then
 					result = false
 				end
 				env.package.loaded[normalized_req_path] = result
+				return (unpack or table.unpack)(raw_result)
 			end
 		end
 
