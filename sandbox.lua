@@ -218,7 +218,7 @@ M.sandbox = function(code, permissions, location, chunk_name)
 		--todo sandboxed loadstring
 		env.require = function(path)
 			assert(location, 'Sandboxed script tried to use `require` but has unknown location')
-
+			
 			--normalize path
 			local normalized_req_path = path:gsub('%/','.'):gsub('%~', ''):gsub('%:','')
 			while normalized_req_path:sub(1,1) == '.' do
@@ -227,6 +227,7 @@ M.sandbox = function(code, permissions, location, chunk_name)
 			while normalized_req_path:sub(-1) == '.' do
 				normalized_req_path = normalized_req_path:sub(1, #normalized_req_path - 1)
 			end
+
 			--check package.loaded
 			do
 				local loaded = env.package.loaded[normalized_req_path]
@@ -234,6 +235,7 @@ M.sandbox = function(code, permissions, location, chunk_name)
 					return loaded
 				end
 			end
+
 			--check package.preload
 			do 
 				local preload = env.package.preload[normalized_req_path]
@@ -241,6 +243,7 @@ M.sandbox = function(code, permissions, location, chunk_name)
 					return setfenv(preload, env)()
 				end
 			end
+
 			--load package from file
 			do
 				local req_lua_file_path = location..'/'..normalized_req_path:gsub('%.', '/')..'.lua'
@@ -269,6 +272,7 @@ M.sandbox = function(code, permissions, location, chunk_name)
 
 	local obj = {
 		fn = fn,
+		env = env,
 		__call = function(self) return pcall(self.fn) end
 	}
 	return setmetatable(obj, obj)
