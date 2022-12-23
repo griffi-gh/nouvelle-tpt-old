@@ -38,6 +38,8 @@ local function w_cond(of, key, cond)
 	return { key, cond and of[key] or nil }
 end
 
+local protected_list = {}
+
 Sandbox.sandbox = function(code, permissions, location, chunk_name, script_id)
 	assert(code and permissions and script_id)
 
@@ -59,6 +61,8 @@ Sandbox.sandbox = function(code, permissions, location, chunk_name, script_id)
 		if not Sandbox.helper_loaded then
 			print('Sandbox helper is not loaded, metatable permissions are unsafe witout it and therefore will be disabled!')
 			permissions.compat_metatable = false
+			permissions.compat_metatable_set = false
+			permissions.compat_metatable_get = false
 			permissions.compat_metatable_raw = false
 		end
 
@@ -89,8 +93,17 @@ Sandbox.sandbox = function(code, permissions, location, chunk_name, script_id)
 			xpcall = xpcall,
 			pcall = pcall,
 			unpack = unpack or table.unpack,
-			setmetatable = permissions.compat_metatable and setmetatable or nil,
-			getmetatable = permissions.compat_metatable and getmetatable or nil,
+			setmetatable = permissions.compat_metatable_set and (function(table, mt)
+				assert((type(mt) == 'table') and (type(table) == 'table'), 'Bad arguments')
+				assert(not(protected_list[table] or protected_list[mt]), 'Protected')
+				return setmetatable(table, mt)
+			end) or nil,
+			getmetatable = permissions.compat_metatable_get and (function(table)
+				assert(type(table) == 'table', 'Bad arguments')
+				local mt = getmetatable(table)
+				assert(not(protected_list[table] or protected_list[mt]), 'Protected')
+				return mt
+			end) or nil,
 			rawget = permissions.compat_metatable_raw and rawget or nil,
 			rawset = permissions.compat_metatable_raw and rawset or nil,
 			rawequal = permissions.compat_metatable_raw and rawequal or nil,
@@ -139,11 +152,29 @@ Sandbox.sandbox = function(code, permissions, location, chunk_name, script_id)
 			--luajit specific
 
 			--powder toy functions
-			tpt = whitelist(tpt, {
+			tpt = setmetatable(whitelist(tpt, {
 				{'version', whitelist(tpt.version, {
 					'jacob1s_mod', 'major', 'minor',
 				})},
-				--todo legacy apis
+				w_cond(tpt, 'set_pause', permissions.simulation_settings),
+				w_cond(tpt, 'heat', permissions.simulation_settings),
+				w_cond(tpt, 'ambient_heat', permissions.simulation_settings),
+				w_cond(tpt, 'newtonian_gravity', permissions.simulation_settings),
+				--todo more legacy apis
+			}), {
+				__index = function(self, i)
+					if ({
+						brushx = true,
+						brushy = true,
+						selectedl = true,
+						selectedr = true,
+						selecteda = true,
+						selectedreplace = true,
+						brushID = true,
+					})[i] then
+						return tpt[i]
+					end
+				end
 			}),
 			fs = whitelist(fs, {
 				w_cond(fs, 'list', permissions.filesystem),
@@ -183,6 +214,17 @@ Sandbox.sandbox = function(code, permissions, location, chunk_name, script_id)
 				'FIELD_LIFE', 'MAX_TEMP', 'MIN_TEMP', 'NUM_PARTS', 'PT_NUM', 
 				'R_TEMP', 'TOOL_VAC', 'TOOL_AIR', 'TOOL_NGRV', 'TOOL_PGRV', 
 				'TOOL_HEAT', 'TOOL_WIND', 'TOOL_COOL', 'YRES', 'XRES',
+				w_cond(tpt, 'waterEqualisation', permissions.simulation_settings),
+				w_cond(tpt, 'gravityMode', permissions.simulation_settings),
+				w_cond(tpt, 'airMode', permissions.simulation_settings),
+				w_cond(tpt, 'edgeMode', permissions.simulation_settings),
+				w_cond(tpt, 'prettyPowders', permissions.simulation_settings),
+			}),
+			renderer = whitelist(ren, {
+				--permissions.render_settings
+			}),
+			event = whitelist(evt, {
+				
 			}),
 			bit = whitelist(bit, {
 				'tobit', 'tohex', 'bnot', 'band',
@@ -190,8 +232,10 @@ Sandbox.sandbox = function(code, permissions, location, chunk_name, script_id)
 				'arshift', 'rol', 'ror', 'bswap',
 			}),
 			http = whitelist(http, {
-				'get', 'post'
+				w_cond(http, 'get', permissions.internet),
+				w_cond(http, 'post', permissions.internet),
 			}),
+			elem = elem, --TODO!!! HACK!!! USE WHITELIST!!!
 		}
 
 		--globals
@@ -199,7 +243,10 @@ Sandbox.sandbox = function(code, permissions, location, chunk_name, script_id)
 		env._ENV = env
 
 		--aliases
-		env.sim = simulation
+		env.sim = env.simulation
+		env.gfx = env.graphics
+		env.ren = env.renderer
+		env.evt = env.event
 
 		--information
 		env[Consts.CODE_NAME] = {
@@ -243,10 +290,23 @@ Sandbox.sandbox = function(code, permissions, location, chunk_name, script_id)
 
 			--load package from file
 			do
-				local req_lua_file_path = location..'/'..normalized_req_path:gsub('%.', '/')..'.lua'
-				local file = assert(io.open(req_lua_file_path, 'rb'))
-				local ld_code = file:read('*a')
-				file:close()
+				local req_lua_file_path_base = location..'/'..normalized_req_path:gsub('%.', '/')
+	
+				local req_lua_file_path,ld_code
+				do
+					req_lua_file_path = req_lua_file_path_base..'/init.lua'
+					local file,err = io.open(req_lua_file_path, 'rb')
+					if file and not(err) then
+						ld_code = file:read('*a')
+						file:close()
+					else
+						req_lua_file_path = req_lua_file_path_base..'.lua'
+						local file = assert(io.open(req_lua_file_path, 'rb'))
+						ld_code = file:read('*a')
+						file:close()
+					end
+				end
+
 				if ld_code:byte(1) == 27 then
 					return error("binary bytecode prohibited")
 				end
@@ -283,9 +343,12 @@ Sandbox.sandbox = function(code, permissions, location, chunk_name, script_id)
 end
 
 local function protect_helper(of)	
+	local mt = getmetatable(of)
+	protected_list[of] = true
+	protected_list[mt] = true
 	if type(of) == 'table' then of.__metatable = shared_lock end
-	getmetatable(of).__newindex = function() error('Protected') end
-	getmetatable(of).__metatable = 0
+	mt.__newindex = function() error('Protected') end
+	mt.__metatable = 0
 end
 
 Sandbox.load_helper = function()
@@ -301,6 +364,8 @@ Sandbox.load_helper = function()
 	if http then
 		protect_helper(http.get(''))
 	end
+	protected_list[string] = true
+	protected_list[''] = true
 	--getmetatable(coroutine.create(function()end)).__metatable = ""
 end
 
