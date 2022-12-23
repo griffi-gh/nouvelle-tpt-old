@@ -1,10 +1,12 @@
+--todo sandboxed events, sould stop after the script is disabled
+--todo scoped filesystem and safe scoped requires!
+
 local consts = require'manager.consts'
 
 local M = {}
 
 M.sandbox_helper_loaded = false
-
---local function proxy(fn) return function(...) return fn(...) end
+M.shared_table = {}
 
 M.sandbox = function(code, permissions, location, chunk_name)
     chunk_name = chunk_name or 'sandboxed'
@@ -199,15 +201,15 @@ M.sandbox = function(code, permissions, location, chunk_name)
 				preload = {},
 			}
 		}
-
-		--todo sandboxed events, sould stop after the script is disabled
-		--todo scoped filesystem and safe scoped requires!
 		env._G = env
 		env._ENV = env
 		env[consts.CODE_NAME] = {
 			sandboxed = true,
 			permissions = permissions_clone,
 		}
+		if permissions.shared then
+			env.shared = M.shared_table
+		end
 
 		--sandboxed require
 		--todo load /init.lua
