@@ -8,7 +8,7 @@ local M = {}
 M.sandbox_helper_loaded = false
 M.shared_table = {}
 
-M.sandbox = function(code, permissions, location, chunk_name)
+M.sandbox = function(code, permissions, location, chunk_name, script_id)
     chunk_name = chunk_name or 'sandboxed'
 
 	local safeguard = 'assert('..consts.CODE_NAME..'.sandboxed and _G["'..consts.CODE_NAME..'"].sandboxed, "Not sandboxed properly, please report this issue immidiately");\t'
@@ -29,6 +29,11 @@ M.sandbox = function(code, permissions, location, chunk_name)
 			permissions.compat_metatable = false
 			permissions.compat_metatable_raw = false
 		end
+
+		if M.shared_table[script_id] then
+			return false, "already running in sandbox"
+		end
+		M.shared_table[script_id] = {}
 
 		local permissions_clone = {}
 		for i,v in pairs(permissions) do
@@ -206,10 +211,13 @@ M.sandbox = function(code, permissions, location, chunk_name)
 		env[consts.CODE_NAME] = {
 			sandboxed = true,
 			permissions = permissions_clone,
-			shared = permissions.shared and M.shared_table or nil
 		}
-		if permissions.shared then
-			env.shared = M.shared_table
+		
+		--shared table functions
+		
+		env.shared = M.shared_table[script_id]
+		env.shared_of = function(mod_id)
+			return M.shared_table[tostring(mod_id)] or nil
 		end
 
 		--sandboxed require
@@ -273,7 +281,10 @@ M.sandbox = function(code, permissions, location, chunk_name)
 	local obj = {
 		fn = fn,
 		env = env,
-		__call = function(self) return pcall(self.fn) end
+		__call = function(self) return pcall(self.fn) end,
+		unload = function(self) 
+			M.shared_table[script_id] = nil
+		end
 	}
 	return setmetatable(obj, obj)
 end
