@@ -2,10 +2,17 @@ local M = {}
 
 M.sandbox_helper_loaded = false
 
+--[[local function proxy(fn)
+	return function(...)
+		return fn(...)
+	end
+end]]
+
 M.sandbox = function(code, permissions)
+	--fixme: this can probably load bytecode
 	local fn,err = loadstring(code)
 	if not fn then return false,err end
-
+	
 	if not permissions.escape_sandbox then
 		if not M.sandbox_helper_loaded then
 			print('Sandbox helper is not loaded, metatable permissions are unsafe witout it and therefore will be disabled!')
@@ -18,8 +25,6 @@ M.sandbox = function(code, permissions)
 			permissions_clone[i] = v
 		end
 		setmetatable(permissions_clone, { __newindex = function()end }) --this is not required
-		
-		--fixme: this can probably load bytecode
 		local env = {
 			print = print,
 			type = type,
@@ -43,7 +48,6 @@ M.sandbox = function(code, permissions)
 				yield = coroutine.yield,
 			},
 			string = {
-				--todo: should string.dump be allowed?
 				--todo somehow point all strings here???
 				byte = string.byte,
 				char = string.char,
@@ -58,6 +62,8 @@ M.sandbox = function(code, permissions)
 				reverse = string.reverse,
 				sub = string.sub,
 				upper = string.upper,
+				--todo: should string.dump be allowed ny default?
+				dump = permissions.compat_string_dump and string.dump or nil
 			},
 			table = {
 				insert = table.insert,
@@ -90,8 +96,9 @@ M.sandbox = function(code, permissions)
 				pow = math.pow,
 				rad = math.rad,
 				--todo implement our own little pseudo-rng
-				--use it to whitelist randomseed!
+				--use it to whitelist randomseed without the compat flag!
 				random = math.random,
+				randomseed = permissions.compat_randomseed and math.randomseed or nil
 				sin = math.sin,
 				sinh = math.sinh,
 				sqrt = math.sqrt,

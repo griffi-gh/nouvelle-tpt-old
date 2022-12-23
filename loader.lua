@@ -1,4 +1,5 @@
 local consts = require'manager.consts'
+local toml = require'manager.lib.toml'
 
 local M = {}
 
@@ -39,14 +40,45 @@ M.enumerate_scripts_in_path = function(path, is_not_root)
 					id = file_path:gsub('%\\', '_'):gsub('%/', '_'):gsub('%.lua', ''),
 					name = file,
 					path = file_path,	
+					dir_path = path,					
 				}
 			end
 		end
 	elseif format == 'mod' then
+		--todo handle errors!
+		local conf_file_path = path..'/'..consts.MOD_CONF_FILE
+		local file = io.open(conf_file_path, 'rb')
+		local conf_file_data = f:read('*a')
+		file:close()
+		local configuration = TOML.parse(conf_file_data)
+		local permissions = {}
+		if configuration.no_sandbox then
+			permissions.escape_sandbox = true
+		else
+			for i,v in pairs(configuration.permissions) do
+				if type(i) == 'number' then
+					permissions[v] = true
+				else 
+					permissions[i] = v
+				end
+			end
+			for i,v in pairs(configuration.compatability) do
+				if type(i) == 'number' then
+					permissions['compat_'..v] = true
+				else 
+					permissions['compat_'..i] = v
+				end
+			end
+		end
 		scripts[#scripts+1] = {
 			format = 'mod',
-			name = 'mod-directory-'..path,
 			dir_path = path,
+			id = configuration.mod.id,			
+			name = configuration.mod.name,
+			author = configuration.mod.author,
+			description = configuration.mod.description,		
+			entrypoint = configuration.mod.entrypoint,
+			permissions = permissions,
 		}
 	elseif format == 'legacy' then
 		error('Cant load legacy mod directories yet')
