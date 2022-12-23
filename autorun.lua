@@ -57,7 +57,8 @@ end
 _G[consts.CODE_NAME] = {
 	sandboxed = false,
 	shared = sandbox.shared_table,
-	permissions = { escape_sandbox = true }
+	permissions = { escape_sandbox = true },
+	manager = manager
 }
 
 --Initialize
