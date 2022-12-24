@@ -55,14 +55,14 @@ M.enumerate_scripts_in_path = function(path, is_not_root)
 		if configuration.no_sandbox then
 			permissions.no_sandbox = true
 		else
-			for i,v in pairs(configuration.permissions) do
+			for i,v in pairs(configuration.permissions or {}) do
 				if type(i) == 'number' then
 					permissions[v] = true
 				else 
 					permissions[i] = v
 				end
 			end
-			for i,v in pairs(configuration.compatability) do
+			for i,v in pairs(configuration.experimental or {}) do
 				if type(i) == 'number' then
 					permissions['compat_'..v] = true
 				else 

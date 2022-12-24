@@ -2,6 +2,14 @@ local Consts = require'manager.consts'
 
 local Env = {}
 
+local function perm_req_error(perm)
+	if perm:sub(1,7) == 'compat_' then
+		error('experimental feature required: '..perm:sub(7-#perm))
+	else
+		error('permission required: '..perm)
+	end
+end
+
 local function whitelist(of, keys)
 	assert(of and keys)
 	local cloned = {}
@@ -16,19 +24,42 @@ local function whitelist(of, keys)
 	end
 	return cloned
 end
-local function w_cond(of, key, cond)
+local function w_perm_fn(key, perms, perm, value)
+	return { key, perms[perm] and value or (function() perm_req_error(perm) end) }
+end
+local function w_perm_any(key, perms, perm, value) --just removes without any helpful info
+	return { key, perms[perm] and value or 'NoPerms' }
+end
+
+--DEPRECATED
+local function w_cond(of, key, cond) 
 	print('WARNING: deprecated w_cond sandboxing impl for '..key)
 	return { key, cond and of[key] or nil }
 end
-local function w_perm_fn(key, perms, perm, value)
-	return { key, perms[perm] and value or (function(...)
-		if perm:sub(1,7) == 'compat_' then
-			error('compatablity flag required: '..perm:sub(7-#perm))
-		else
-			error('permission required: '..perm)
-		end
-	end) }
+--
+
+local function operate_on(something, operation)
+	operation(something)
+	return something
 end
+
+--[[local function ipairs_helper(t, var)
+  var = var + 1
+  local value = t[var]
+  if value == nil then return end
+  return var, value
+end]]
+--[[{'next', function(table, k)
+			local mt = getmetatable(table)
+			local fn = mt and mt.__next or next 
+			return fn(table, k)
+		end},
+		{'ipairs', function(table)
+			return ipairs_helper, table, 0
+		end},
+		{'pairs', function(table)
+			return env.next, table, nil
+		end},]]
 
 Env.build_env = function(arg)
 	local Sandbox = assert(arg.sandbox)
@@ -49,9 +80,25 @@ Env.build_env = function(arg)
 	local env 
 	env = whitelist(_G, {
 		'_VERSION', 'print', 'type', 'error',
-		'assert', 'ipairs', 'pairs', 'next',
-		'select', 'tonumber', 'tostring',
-		'xpcall', 'pcall', 'unpack',
+		'assert', 'select', 'tonumber', 'tostring', 
+		'xpcall', 'pcall', 'unpack', 'next', 
+		'ipairs',
+		
+		{'pairs', function(tbl)
+			if tbl == env.elem then
+				if not permissions.elements then
+					perm_req_error('elements')
+					return
+				end
+				if not permissions.compat_pairs_on_elem then
+					perm_req_error('compat_pairs_on_elem')
+					return
+				end
+				return pairs(elem) --not sure if this is safe but it fixes tptmp
+			end
+			return pairs(tbl)
+		end},
+		
 		w_perm_fn('setmetatable', permissions, 'compat_metatable', function(table, mt)
 			assert((type(mt) == 'table') and (type(table) == 'table'), 'Argument not a table')
 			assert(not(protected_list[table] or protected_list[mt]), 'Protected')
@@ -137,17 +184,18 @@ Env.build_env = function(arg)
 			end
 		})},
 		{'fs', whitelist(fs, {
-			w_cond(fs, 'list', permissions.filesystem),
-			w_cond(fs, 'exists', permissions.filesystem),
-			w_cond(fs, 'isFile', permissions.filesystem),
-			w_cond(fs, 'isDirectory', permissions.filesystem),
-			w_cond(fs, 'makeDirectory', permissions.filesystem),
-			w_cond(fs, 'removeFile', permissions.filesystem),
-			w_cond(fs, 'removeDirectory', permissions.filesystem),
-			w_cond(fs, 'move', permissions.filesystem),
-			w_cond(fs, 'copy', permissions.filesystem),
+			w_perm_fn('list', permissions, 'filesystem', fs.list),
+			w_perm_fn('exists', permissions, 'filesystem', fs.exists),
+			w_perm_fn('isFile', permissions, 'filesystem', fs.isFile),
+			w_perm_fn('isDirectory', permissions, 'filesystem', fs.isDirectory),
+			w_perm_fn('makeDirectory', permissions, 'filesystem', fs.makeDirectory),
+			w_perm_fn('removeFile', permissions, 'filesystem', fs.removeFile),
+			w_perm_fn('removeDirectory', permissions, 'filesystem', fs.removeDirectory),
+			w_perm_fn('move', permissions, 'filesystem', fs.move),
+			w_perm_fn('copy', permissions, 'filesystem', fs.copy),
 		})},
 		{'graphics', whitelist(graphics, {
+			'WIDTH', 'HEIGHT',
 			'textSize', 'getColors', 'getHexColor', 
 			w_cond(fs, 'drawText', permissions.graphics),
 			w_cond(fs, 'drawLine', permissions.graphics),
@@ -174,13 +222,25 @@ Env.build_env = function(arg)
 			'FIELD_LIFE', 'MAX_TEMP', 'MIN_TEMP', 'NUM_PARTS', 'PT_NUM', 
 			'R_TEMP', 'TOOL_VAC', 'TOOL_AIR', 'TOOL_NGRV', 'TOOL_PGRV', 
 			'TOOL_HEAT', 'TOOL_WIND', 'TOOL_COOL', 'YRES', 'XRES',
-			w_cond(tpt, 'waterEqualisation', permissions.simulation_settings),
-			w_cond(tpt, 'gravityMode', permissions.simulation_settings),
-			w_cond(tpt, 'airMode', permissions.simulation_settings),
-			w_cond(tpt, 'edgeMode', permissions.simulation_settings),
-			w_cond(tpt, 'prettyPowders', permissions.simulation_settings),
+			w_cond(simulation, 'waterEqualisation', permissions.simulation_settings),
+			w_cond(simulation, 'gravityMode', permissions.simulation_settings),
+			w_cond(simulation, 'airMode', permissions.simulation_settings),
+			w_cond(simulation, 'edgeMode', permissions.simulation_settings),
+			w_cond(simulation, 'prettyPowders', permissions.simulation_settings),
+			w_perm_any('signs', permissions, 'simulation', setmetatable({}, {
+				__metatable = 0,
+				__index = function(self, i)
+					--todo: this may be unsafe
+					if not permissions.compat_sim_signs then
+						perm_req_error('compat_sim_signs')
+						return
+					end
+					return sim.signs[i]
+				end
+			})),
+			w_perm_fn('getSaveID', permissions, 'simulation', sim.getSaveID),
 			--Undocumented:
-			'CELL'
+			'CELL', 'PMAPBITS'
 		})},
 		{'renderer', whitelist(renderer, {
 			--permissions.render_settings
@@ -197,7 +257,21 @@ Env.build_env = function(arg)
 			w_cond(http, 'get', permissions.internet),
 			w_cond(http, 'post', permissions.internet),
 		})},
-		elem = elem, --TODO!!! HACK!!! USE WHITELIST!!!,
+		{'elements', setmetatable(whitelist(elem, {
+			w_perm_fn('allocate', permissions, 'elements', elem.allocate),
+			w_perm_fn('free', permissions, 'elements', elem.allocate),
+			w_perm_fn('loadDefault', permissions, 'elements', elem.loadDefault),
+			w_perm_fn('element', permissions, 'elements', elem.element),
+			w_perm_fn('property', permissions, 'elements', elem.property),
+		}), {
+			__metatable = 0,
+			__index = function(self, i)
+				--todo support for mods
+				if i:sub(1,11) == 'DEFAULT_PT_' then
+					return elem[i]
+				end
+			end
+		})},
 
 		--Nouvelle things
 		{Consts.CODE_NAME, setmetatable({
@@ -227,11 +301,12 @@ Env.build_env = function(arg)
 	env.gfx = env.graphics
 	env.ren = env.renderer
 	env.evt = env.event
-
+	env.elem = env.elements
+	
 	--sandboxed require
 	env.require = function(path)
 		assert(script_dir, 'Sandboxed script tried to use `require` but has unknown script_dir')
-		print('require '..path)
+		--print('require '..path)
 		
 		--normalize path
 		local normalized_req_path = path:gsub('%/','.'):gsub('%~', ''):gsub('%:','')

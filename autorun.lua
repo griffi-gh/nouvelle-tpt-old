@@ -3,7 +3,7 @@ local Loader = require'manager.loader'
 local Sandbox = require'manager.sandbox.init'
 
 --Make sure that the manager is not loaded yet
-assert(not _G['_'..Consts.CODE_NAME], 'Already loaded')
+assert(not _G[Consts.CODE_NAME], 'Already loaded')
 
 --Create main struct
 local manager = {}
@@ -35,7 +35,7 @@ function manager:compile_script_entrypoints()
 			else
 				local code = file:read('*a')
 				file:close()
-				local box, compile_err = Sandbox.sandbox(code, v.permissions, v.dir_path, v.id..':entrypoint', v.id)
+				local box, compile_err = Sandbox.sandbox(code, v.permissions, v.dir_path, v.id, v.id)
 				if compile_err then
 					tpt.throw_error('Script compile error: \n'..compile_err)
 				else 

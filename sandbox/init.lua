@@ -47,11 +47,7 @@ Sandbox.sandbox = function(code, permissions, location, chunk_name, script_id)
 	local env = {}
 	if not permissions.no_sandbox then
 		if not Sandbox.helper_loaded then
-			print('Sandbox helper is not loaded, metatable permissions are unsafe witout it and therefore will be disabled!')
-			permissions.compat_metatable = false
-			permissions.compat_metatable_set = false
-			permissions.compat_metatable_get = false
-			permissions.compat_metatable_raw = false
+			error('Sandbox helper is not loaded')
 		end
 
 		if Sandbox.shared_table[script_id] then
@@ -84,12 +80,14 @@ Sandbox.sandbox = function(code, permissions, location, chunk_name, script_id)
 	return setmetatable(obj, obj)
 end
 
-local function protect_helper(of)	
+local function protect_helper(of, lock_writes)	
+	if lock_writes == nil then lock_writes = true end
 	local mt = getmetatable(of)
 	Sandbox.protected_list[of] = true
 	Sandbox.protected_list[mt] = true
-	if type(of) == 'table' then of.__metatable = shared_lock end
-	mt.__newindex = function() error('Protected') end
+	if lock_writes then
+		mt.__newindex = function() error('Protected') end
+	end
 	mt.__metatable = 0
 end
 
@@ -108,6 +106,13 @@ Sandbox.load_helper = function()
 	end
 	Sandbox.protected_list[string] = true
 	Sandbox.protected_list[''] = true
+	do
+		local i = 0
+		while sim.signs[i] do
+			protect_helper(sim.signs[i], false)
+			i = i + 1
+		end
+	end
 end
 
 return Sandbox
