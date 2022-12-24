@@ -115,10 +115,10 @@ Env.build_env = function(arg)
 			{'version', whitelist(tpt.version, {
 				'jacob1s_mod', 'major', 'minor',
 			})},
-			w_cond(tpt, 'set_pause', permissions.simulation_settings),
-			w_cond(tpt, 'heat', permissions.simulation_settings),
-			w_cond(tpt, 'ambient_heat', permissions.simulation_settings),
-			w_cond(tpt, 'newtonian_gravity', permissions.simulation_settings),
+			w_perm_fn('set_pause', permissions, 'simulation_settings', tpt.set_pause),
+			w_perm_fn('heat', permissions, 'simulation_settings', tpt.set_pause),
+			w_perm_fn('ambient_heat', permissions, 'simulation_settings', tpt.set_pause),
+			w_perm_fn('newtonian_gravity', permissions, 'simulation_settings', tpt.set_pause),
 			--todo more legacy apis
 		}), {
 			__metatable = 0,
