@@ -94,12 +94,12 @@ Sandbox.sandbox = function(code, permissions, location, chunk_name, script_id)
 			pcall = pcall,
 			unpack = unpack or table.unpack,
 			setmetatable = permissions.compat_metatable_set and (function(table, mt)
-				assert((type(mt) == 'table') and (type(table) == 'table'), 'Bad arguments')
+				assert((type(mt) == 'table') and (type(table) == 'table'), 'Argument not a table')
 				assert(not(protected_list[table] or protected_list[mt]), 'Protected')
 				return setmetatable(table, mt)
 			end) or nil,
 			getmetatable = permissions.compat_metatable_get and (function(table)
-				assert(type(table) == 'table', 'Bad arguments')
+				assert(type(table) == 'table', 'Argument not a table')
 				local mt = getmetatable(table)
 				assert(not(protected_list[table] or protected_list[mt]), 'Protected')
 				return mt
@@ -199,11 +199,11 @@ Sandbox.sandbox = function(code, permissions, location, chunk_name, script_id)
 			socket = whitelist(socket, {
 				'_VERSION', '_DEBUG', 'gettime', 'sleep',
 				'try', 'protect', 'newtry', 'skip',
-				w_cond(fs, 'tcp', permissions.internet),
-				w_cond(fs, 'udp', permissions.internet),
-				w_cond(fs, 'sink', permissions.internet),
-				w_cond(fs, 'select', permissions.internet),
-				w_cond(fs, 'source', permissions.internet),
+				w_cond(socket, 'tcp', permissions.internet),
+				w_cond(socket, 'udp', permissions.internet),
+				w_cond(socket, 'sink', permissions.internet),
+				w_cond(socket, 'select', permissions.internet),
+				w_cond(socket, 'source', permissions.internet),
 				--dns is missing!
 			}),
 			simulation = whitelist(sim, {
