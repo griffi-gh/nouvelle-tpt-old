@@ -179,6 +179,8 @@ Env.build_env = function(arg)
 			w_cond(tpt, 'airMode', permissions.simulation_settings),
 			w_cond(tpt, 'edgeMode', permissions.simulation_settings),
 			w_cond(tpt, 'prettyPowders', permissions.simulation_settings),
+			--Undocumented:
+			'CELL'
 		})},
 		{'renderer', whitelist(renderer, {
 			--permissions.render_settings

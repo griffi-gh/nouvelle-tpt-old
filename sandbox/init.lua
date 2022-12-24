@@ -63,7 +63,7 @@ Sandbox.sandbox = function(code, permissions, location, chunk_name, script_id)
 			permissions = permissions,
 			script_dir = location,
 			script_id = script_id,
-			chunk_name = chunk_same,
+			chunk_name = chunk_name,
 		})
 		fn = setfenv(fn, env)
 	end
