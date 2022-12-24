@@ -1,6 +1,6 @@
 local Consts = require'manager.consts'
 local Loader = require'manager.loader'
-local Sandbox = require'manager.sandbox'
+local Sandbox = require'manager.sandbox.init'
 
 --Make sure that the manager is not loaded yet
 assert(not _G['_'..Consts.CODE_NAME], 'Already loaded')
