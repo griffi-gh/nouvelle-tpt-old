@@ -1,4 +1,5 @@
 local Consts = require'manager.consts'
+local load_evt_compat = require'manager.sandbox.event_compat'
 
 local Env = {}
 
@@ -179,6 +180,8 @@ Env.build_env = function(arg)
 					selecteda = true,
 					selectedreplace = true,
 					brushID = true,
+					mousex = true,
+					mousey = true,
 				})[i] then
 					return tpt[i]
 				end
@@ -198,12 +201,12 @@ Env.build_env = function(arg)
 		{'graphics', whitelist(graphics, {
 			'WIDTH', 'HEIGHT',
 			'textSize', 'getColors', 'getHexColor', 
-			w_cond(fs, 'drawText', permissions.graphics),
-			w_cond(fs, 'drawLine', permissions.graphics),
-			w_cond(fs, 'drawRect', permissions.graphics),
-			w_cond(fs, 'fillRect', permissions.graphics),
-			w_cond(fs, 'drawCircle', permissions.graphics),
-			w_cond(fs, 'fillCircle', permissions.graphics),
+			w_cond(gfx, 'drawText', permissions.graphics),
+			w_cond(gfx, 'drawLine', permissions.graphics),
+			w_cond(gfx, 'drawRect', permissions.graphics),
+			w_cond(gfx, 'fillRect', permissions.graphics),
+			w_cond(gfx, 'drawCircle', permissions.graphics),
+			w_cond(gfx, 'fillCircle', permissions.graphics),
 		})},
 		{'socket', whitelist(socket, {
 			'_VERSION', '_DEBUG', 'gettime', 'sleep',
@@ -242,14 +245,23 @@ Env.build_env = function(arg)
 			w_perm_fn('getSaveID', permissions, 'simulation', sim.getSaveID),
 			w_perm_fn('decoColor', permissions, 'simulation', sim.decoColor),
 			w_perm_fn('decoColour', permissions, 'simulation', sim.decoColour),
+			w_perm_fn('ambientAirTemp', permissions, 'simulation', sim.ambientAirTemp),
+			w_perm_fn('replaceModeFlags', permissions, 'simulation', sim.replaceModeFlags),
+			'adjustCoords', 'brush', --perm?
 			--Undocumented:
 			'CELL', 'PMAPBITS'
 		})},
 		{'renderer', whitelist(renderer, {
 			--permissions.render_settings
+			w_perm_fn('zoomEnabled', permissions, 'renderer', ren.zoomEnabled),
+			w_perm_fn('zoomScope', permissions, 'renderer', ren.zoomScope),
 		})},
 		{'event', whitelist(event, {
+			'register', 'unregister', 'getmodifiers',
 			
+			'keypress', 'keyrelease', 'textinput', 
+			'mousedown', 'mouseup', 'mousemove',
+			'mousewheel', 'tick', 'blur', 'close',
 		})},
 		{'bit', whitelist(bit, {
 			'tobit', 'tohex', 'bnot', 'band',
@@ -306,6 +318,9 @@ Env.build_env = function(arg)
 	env.evt = env.event
 	env.elem = env.elements
 	
+	--load compat script
+	setfenv(load_evt_compat, env)()
+
 	--sandboxed require
 	env.require = function(path)
 		assert(script_dir, 'Sandboxed script tried to use `require` but has unknown script_dir')
