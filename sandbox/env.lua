@@ -257,11 +257,13 @@ Env.build_env = function(arg)
 			w_perm_fn('zoomScope', permissions, 'renderer', ren.zoomScope),
 		})},
 		{'event', whitelist(event, {
-			'register', 'unregister', 'getmodifiers',
-			
-			'keypress', 'keyrelease', 'textinput', 
+			'register', 'unregister', 'getmodifiers', --todo reimplement
+			--event types
+			'keypress', 'keyrelease', 'textinput',
 			'mousedown', 'mouseup', 'mousemove',
 			'mousewheel', 'tick', 'blur', 'close',
+			--undocumented
+			'textediting'
 		})},
 		{'bit', whitelist(bit, {
 			'tobit', 'tohex', 'bnot', 'band',
@@ -317,6 +319,7 @@ Env.build_env = function(arg)
 	env.ren = env.renderer
 	env.evt = env.event
 	env.elem = env.elements
+	env.plat = env.platform
 	
 	--load compat script
 	setfenv(load_evt_compat, env)()
