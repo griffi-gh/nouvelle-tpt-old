@@ -2,11 +2,12 @@ local Consts = require'manager.consts'
 
 local Env = {}
 
-local function perm_req_error(perm)
+local function perm_req_error(perm, fname)
+	local touse = fname and (' to use "'..fname..'"') or ''
 	if perm:sub(1,7) == 'compat_' then
-		error('experimental feature required: '..perm:sub(7-#perm))
+		error('experimental feature "'..perm:sub(7-#perm)..'" required'..touse)
 	else
-		error('permission required: '..perm)
+		error('permission "'..perm..'" required'..touse)
 	end
 end
 
@@ -25,7 +26,7 @@ local function whitelist(of, keys)
 	return cloned
 end
 local function w_perm_fn(key, perms, perm, value)
-	return { key, perms[perm] and value or (function() perm_req_error(perm) end) }
+	return { key, perms[perm] and value or (function() perm_req_error(perm, key) end) }
 end
 local function w_perm_any(key, perms, perm, value) --just removes without any helpful info
 	return { key, perms[perm] and value or 'NoPerms' }
@@ -91,7 +92,7 @@ Env.build_env = function(arg)
 					return
 				end
 				if not permissions.compat_pairs_on_elem then
-					perm_req_error('compat_pairs_on_elem')
+					perm_req_error('compat_pairs_on_elem', 'pairs(elem)')
 					return
 				end
 				return pairs(elem) --not sure if this is safe but it fixes tptmp
@@ -232,13 +233,15 @@ Env.build_env = function(arg)
 				__index = function(self, i)
 					--todo: this may be unsafe
 					if not permissions.compat_sim_signs then
-						perm_req_error('compat_sim_signs')
+						perm_req_error('compat_sim_signs', 'sim.signs')
 						return
 					end
 					return sim.signs[i]
 				end
 			})),
 			w_perm_fn('getSaveID', permissions, 'simulation', sim.getSaveID),
+			w_perm_fn('decoColor', permissions, 'simulation', sim.decoColor),
+			w_perm_fn('decoColour', permissions, 'simulation', sim.decoColour),
 			--Undocumented:
 			'CELL', 'PMAPBITS'
 		})},
